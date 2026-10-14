@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "displayName", "email", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Animation and digital art project metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "fps": { "type": "number" },
+        "frameCount": { "type": "number" },
+        "layerCount": { "type": "number" },
+        "thumbnail": { "type": "string", "maxLength": 150000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "title", "width", "height", "fps", "frameCount", "createdAt", "updatedAt"]
+    },
+    "Frame": {
+      "title": "Frame",
+      "description": "Individual animation frame data with layers and timing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "projectId": { "type": "string", "maxLength": 128 },
+        "frameIndex": { "type": "number" },
+        "duration": { "type": "number" },
+        "payload": { "type": "string", "maxLength": 750000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "projectId", "frameIndex", "payload", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account documents stored per user ID"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Creative projects owned by users"
+    },
+    "/projects/{projectId}/frames/{frameId}": {
+      "schema": "Frame",
+      "description": "Animation frames belonging to a project"
+    }
+  }
+}

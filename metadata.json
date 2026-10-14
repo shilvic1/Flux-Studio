@@ -1,0 +1,6 @@
+{
+  "name": "FLUX Studio",
+  "description": "Professional browser-based 2D digital art and frame-by-frame animation editor with real digital painting, onion skinning, layer compositing, and cloud project sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

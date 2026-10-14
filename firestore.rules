@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'displayName', 'email', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'displayName', 'email', 'photoURL', 'createdAt', 'updatedAt']) &&
+             data.id is string && isValidId(data.id) &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 150 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'title', 'width', 'height', 'fps', 'frameCount', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'ownerId', 'title', 'description', 'width', 'height', 'fps', 'frameCount', 'layerCount', 'thumbnail', 'createdAt', 'updatedAt']) &&
+             data.id is string && isValidId(data.id) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+             data.width is number && data.width >= 16 && data.width <= 4096 &&
+             data.height is number && data.height >= 16 && data.height <= 4096 &&
+             data.fps is number && data.fps >= 1 && data.fps <= 60 &&
+             data.frameCount is number && data.frameCount >= 1 && data.frameCount <= 1000 &&
+             (!('layerCount' in data) || (data.layerCount is number && data.layerCount >= 1 && data.layerCount <= 50)) &&
+             (!('thumbnail' in data) || (data.thumbnail is string && data.thumbnail.size() <= 150000)) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidFrame(data) {
+      return data.keys().hasAll(['id', 'projectId', 'frameIndex', 'payload', 'updatedAt']) &&
+             data.keys().hasOnly(['id', 'projectId', 'frameIndex', 'duration', 'payload', 'updatedAt']) &&
+             data.id is string && isValidId(data.id) &&
+             data.projectId is string && isValidId(data.projectId) &&
+             data.frameIndex is number && data.frameIndex >= 0 && data.frameIndex <= 1000 &&
+             (!('duration' in data) || (data.duration is number && data.duration >= 1 && data.duration <= 60)) &&
+             data.payload is string && data.payload.size() <= 750000 &&
+             data.updatedAt is timestamp;
+    }
+
+    function isParentProjectOwner(projectId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/projects/$(projectId)) &&
+        get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    // User profile documents
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId) &&
+                       incoming().id == userId &&
+                       incoming().email == request.auth.token.email &&
+                       isValidUser(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidId(userId) && (
+                       (
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']) &&
+                         incoming().displayName is string && incoming().displayName.size() <= 100 &&
+                         (!('photoURL' in incoming()) || (incoming().photoURL is string && incoming().photoURL.size() <= 500)) &&
+                         incoming().updatedAt == request.time
+                       ) || (
+                         incoming().id == userId && incoming().email == existing().email &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt == request.time &&
+                         isValidUser(incoming())
+                       )
+                     );
+      allow delete: if false;
+    }
+
+    // Projects collection
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(projectId) &&
+                       incoming().id == projectId &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().createdAt == request.time &&
+                       incoming().updatedAt == request.time &&
+                       isValidProject(incoming());
+      allow update: if isSignedIn() && isValidId(projectId) &&
+                       existing().ownerId == request.auth.uid &&
+                       incoming().id == projectId &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt == request.time &&
+                       isValidProject(incoming());
+      allow delete: if isSignedIn() && isValidId(projectId) &&
+                       existing().ownerId == request.auth.uid;
+
+      // Frames subcollection
+      match /frames/{frameId} {
+        allow get: if isParentProjectOwner(projectId);
+        allow list: if isParentProjectOwner(projectId);
+        allow create: if isParentProjectOwner(projectId) && isValidId(frameId) &&
+                         incoming().id == frameId &&
+                         incoming().projectId == projectId &&
+                         incoming().updatedAt == request.time &&
+                         isValidFrame(incoming());
+        allow update: if isParentProjectOwner(projectId) && isValidId(frameId) &&
+                         incoming().id == frameId &&
+                         incoming().projectId == projectId &&
+                         incoming().updatedAt == request.time &&
+                         isValidFrame(incoming());
+        allow delete: if isParentProjectOwner(projectId) && isValidId(frameId);
+      }
+    }
+  }
+}
